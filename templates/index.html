@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>販売実績CSV管理（Phase1）</title>
+    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+</head>
+<body>
+<h1>販売実績CSV管理（Phase1）</h1>
+
+<h2>CSVアップロード（複数可）</h2>
+<input
+    type="file"
+    id="files"
+    multiple
+    accept=".csv,text/csv"
+    onchange="upload()"
+/>
+
+<h2>操作</h2>
+<button onclick="clearData()">クリア</button>
+
+<h2>ステータス</h2>
+<pre id="status"></pre>
+
+<h2>グラフ条件選択</h2>
+
+<div>
+    開始日：
+    <input type="date" id="start_date">
+    終了日：
+    <input type="date" id="end_date">
+</div>
+
+<div>
+    商品名：
+    <select id="products" multiple size="5"></select>
+</div>
+
+<button onclick="showGraph()">グラフ表示</button>
+
+<pre id="result"></pre>
+
+<div id="graph" style="width:100%; height:500px;"></div>
+
+
+<script>
+async function upload() {
+    const files = document.getElementById("files").files;
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    for (let f of files) {
+        formData.append("files", f);
+    }
+
+    const res = await fetch("/upload", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await res.json();
+    document.getElementById("status").textContent =
+        JSON.stringify(data, null, 2);
+
+    await loadFilters();
+
+    // 同じファイルを再選択できるようにリセット
+    document.getElementById("files").value = "";
+}
+
+async function clearData() {
+    const res = await fetch("/clear", { method: "POST" });
+    const data = await res.json();
+    document.getElementById("status").textContent =
+        JSON.stringify(data, null, 2);
+}
+
+async function loadFilters() {
+    const res = await fetch("/filters");
+    const data = await res.json();
+
+    // 日付範囲
+    document.getElementById("start_date").min = data.date_min;
+    document.getElementById("start_date").max = data.date_max;
+    document.getElementById("end_date").min = data.date_min;
+    document.getElementById("end_date").max = data.date_max;
+
+    document.getElementById("start_date").value = data.date_min;
+    document.getElementById("end_date").value = data.date_max;
+
+    // 商品
+    const productSelect = document.getElementById("products");
+    productSelect.innerHTML = "";
+    data.products.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        productSelect.appendChild(opt);
+    });
+
+    // 店舗
+    const storeSelect = document.getElementById("stores");
+    storeSelect.innerHTML = "";
+    data.stores.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        opt.selected = true;
+        storeSelect.appendChild(opt);
+    });
+}
+
+function getSelectedValues(selectId) {
+    return Array.from(
+        document.getElementById(selectId).selectedOptions
+    ).map(o => o.value);
+}
+
+async function showGraph() {
+    const payload = {
+        start_date: document.getElementById("start_date").value,
+        end_date: document.getElementById("end_date").value,
+        products: getSelectedValues("products"),
+    };
+
+    const res = await fetch("/graph-data", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+        alert(data.error);
+        return;
+    }
+
+    Plotly.newPlot(
+        "graph",
+        data.traces,
+        data.layout,
+        {responsive: true}
+    );
+}
+
+// 初期ロード
+loadFilters();
+
+</script>
+</body>
+</html>
