@@ -11,7 +11,8 @@ from typing import List
 from pydantic import BaseModel
 from typing import List
 from datetime import date
-
+from io import StringIO
+import chardet
 
 class GraphRequest(BaseModel):
     start_date: date
@@ -47,7 +48,12 @@ async def upload_csv(files: List[UploadFile] = File(...)):
                 content={"error": "CSVファイルのみアップロード可能です"}
             )
 
-        df              = read_csv_with_encoding(file)
+        contents = await file.read()
+        encoding = chardet.detect(contents)["encoding"]
+        csv_str = contents.decode(encoding)
+        df = pd.read_csv(StringIO(csv_str))
+        #csv_str = contents.decode("utf-8")
+        #df              = read_csv_with_encoding(file)
         # ===== 売上年月日 正規化 =====
         # 1) 数値・文字列混在 → 文字列
         s = df["売上年月日"]
